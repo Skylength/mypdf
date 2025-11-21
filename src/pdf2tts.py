@@ -4,8 +4,9 @@
 import argparse
 from pathlib import Path
 from typing import Optional
+from datetime import datetime
 
-import fitz  # PyMuPDF
+import pymupdf
 from ttsfm import TTSClient, Voice, AudioFormat
 
 # 默认使用官方托管的 https://ttsapi.site/ 作为后端
@@ -18,7 +19,7 @@ def extract_text_from_pdf(
     end_page: Optional[int] = None,
 ) -> str:
     """按页提取 PDF 文本，简单拼起来。"""
-    doc = fitz.open(pdf_path)
+    doc = pymupdf.open(pdf_path)
     texts = []
 
     total_pages = doc.page_count
@@ -50,8 +51,10 @@ def pdf_to_mp3_with_ttsfm(
     用 ttsfm 把整本 PDF 变成一个 MP3：
     - ttsfm 会自动按 max_length 拆分长文本、调用多次 TTS，并合并音频。
     """
-    print(f"读取 PDF: {pdf_path}")
+    start_time = datetime.now()
+    print(f"[{start_time.strftime('%H:%M:%S')}] 读取 PDF: {pdf_path}")
     full_text = extract_text_from_pdf(pdf_path, start_page=start_page, end_page=end_page)
+    print(f"[{datetime.now().strftime('%H:%M:%S')}] PDF 读取完成，耗时: {(datetime.now() - start_time).total_seconds():.2f}秒")
 
     if not full_text.strip():
         raise ValueError("PDF 中没有提取到文本（可能是纯图片 PDF，需要 OCR）")
@@ -63,7 +66,8 @@ def pdf_to_mp3_with_ttsfm(
             "请使用 -start / -end 或 -start-page / -end-page 限定页码，或拆分 PDF 后重试。"
         )
 
-    print("调用 TTSFM 生成语音（自动长文本拆分 + 合并）...")
+    tts_start = datetime.now()
+    print(f"[{tts_start.strftime('%H:%M:%S')}] 调用 TTSFM 生成语音（自动长文本拆分 + 合并）...")
 
     # 这里直接把整本书丢给 ttsfm，它会：
     # 1）按句子 + max_length 自动拆分  2）多次请求 openai.fm  3）合并音频
@@ -77,10 +81,12 @@ def pdf_to_mp3_with_ttsfm(
         preserve_words=True,
         auto_combine=True,
     )
+    print(f"[{datetime.now().strftime('%H:%M:%S')}] TTS 生成完成，耗时: {(datetime.now() - tts_start).total_seconds():.2f}秒")
 
     out_path = Path(mp3_path)
     resp.save_to_file(str(out_path))        # 官方示例就是这么用的
-    print(f"完成！输出文件：{out_path}")
+    total_time = (datetime.now() - start_time).total_seconds()
+    print(f"[{datetime.now().strftime('%H:%M:%S')}] 完成！输出文件：{out_path}，总耗时: {total_time:.2f}秒")
 
 
 def main():
